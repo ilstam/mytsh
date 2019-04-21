@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "parser.tab.h"
 
+#define MAX_INPUT 5000
+
 command final_cmd;
 
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
@@ -38,37 +40,25 @@ void exec_cmd(command *cmd)
 
 int main(void)
 {
+    int retval;
+    char input[MAX_INPUT+1];
     YY_BUFFER_STATE buffer;
 
-    buffer = yy_scan_string("ls1 foo bar < in.txt > out.txt ");
-    yyparse();
-    yy_delete_buffer(buffer);
-    exec_cmd(&final_cmd);
-    free_cmd(&final_cmd);
+    while (true) {
+        printf("myshell$ ");
 
-    buffer = yy_scan_string("lsallo foo2 bar2 < in2.txt > out2.txt &");
-    yyparse();
-    yy_delete_buffer(buffer);
-    exec_cmd(&final_cmd);
-    free_cmd(&final_cmd);
+        fgets(input, MAX_INPUT, stdin);
 
-    buffer = yy_scan_string("ls1 | ls2");
-    yyparse();
-    yy_delete_buffer(buffer);
-    exec_cmd(&final_cmd);
-    free_cmd(&final_cmd);
+        buffer = yy_scan_string(input);
 
-    buffer = yy_scan_string("ls3 | ls4");
-    yyparse();
-    yy_delete_buffer(buffer);
-    exec_cmd(&final_cmd);
-    free_cmd(&final_cmd);
+        if ((retval = yyparse())) {
+            continue;
+        }
 
-    buffer = yy_scan_string("test1 papa | test2 this is < in3.txt | test3 &");
-    yyparse();
-    yy_delete_buffer(buffer);
-    exec_cmd(&final_cmd);
-    free_cmd(&final_cmd);
+        yy_delete_buffer(buffer);
+        exec_cmd(&final_cmd);
+        free_cmd(&final_cmd);
+    }
 
     return 0;
 }
