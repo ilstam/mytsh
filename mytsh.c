@@ -152,10 +152,7 @@ void exec_cmd(command *cmd)
         }
 
         /* parent process */
-        int status;
-        do {
-            waitpid(pid, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        waitpid(pid, NULL, 0);
 
     } else if (cmd->type == CMD_PIPE) {
 
@@ -190,18 +187,12 @@ void exec_cmd(command *cmd)
             return;
         }
 
-
         close(p[0]);
         close(p[1]);
 
-        int status;
-
-        do {
-            waitpid(pid1, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-        do {
-            waitpid(pid2, &status, WUNTRACED);
-        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        while (wait(NULL) > 0) {
+            /* wait for all children */
+        }
 
     }
 }
