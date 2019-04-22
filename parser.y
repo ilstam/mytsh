@@ -17,7 +17,6 @@ void yyerror(char *s);
 
     typedef struct {
         char name[5000];
-        char args[5000];
         char in_redir[5000];
         char out_redir[5000];
         bool bg;
@@ -42,15 +41,15 @@ void yyerror(char *s);
 %union {
     bool bool_type;
     char *string;
+    char string_buffer[5000];
     struct {char *in; char *out;} redir_pair;
-    struct {char name[5000]; char args[5000];} command_pair;
     cmd_simple cmd_simple;
     command command;
 }
 
 %type <command> pipeline
 %type <cmd_simple> simple
-%type <command_pair> command
+%type <string_buffer> command
 %type <redir_pair> redir
 %type <string> input_redir
 %type <string> output_redir
@@ -77,15 +76,14 @@ back_ground : BACKGROUND  { $$ = true; }
             ;
 
 simple : command redir {
-                         strcpy($$.name, $1.name);
-                         strcpy($$.args, $1.args);
+                         strcpy($$.name, $1);
                          strcpy($$.in_redir, $2.in);
                          strcpy($$.out_redir, $2.out);
                         }
        ;
 
-command : command STRING { strcat($$.args, yylval.string); strcat($$.args, " "); }
-        | STRING         { strcpy($$.name, yylval.string); }
+command : command STRING { strcat($$, " "); strcat($$, yylval.string); }
+        | STRING         { strcpy($$, yylval.string); }
         ;
 
 redir : input_redir output_redir { $$.in = $1; $$.out = $2; }
