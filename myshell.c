@@ -15,6 +15,7 @@
 #define MAX_TOKENS 100
 
 
+bool empty_line;
 command final_cmd;
 
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
@@ -113,7 +114,7 @@ int main(void)
 
         buffer = yy_scan_string(input);
 
-        if ((retval = yyparse())) {
+        if ((retval = yyparse()) || empty_line) {
             continue;
         }
 

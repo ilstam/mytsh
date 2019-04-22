@@ -35,6 +35,7 @@ void yyerror(char *s);
         };
     } command;
 
+    extern bool empty_line;
     extern command final_cmd;
 }
 
@@ -59,8 +60,8 @@ void yyerror(char *s);
 %token EXIT PIPE INPUT_REDIR OUTPUT_REDIR STRING NL BACKGROUND
 
 %%
-cmd_line :
-         | EXIT {}
+cmd_line : /* empty */          { empty_line = true; }
+         | EXIT                 {  }
          | pipeline back_ground {
                                   final_cmd = $1;
                                   if (final_cmd.type == CMD_SIMPLE) {
@@ -68,6 +69,7 @@ cmd_line :
                                   } else {
                                       final_cmd.pipe.right->simple.bg = $2;
                                   }
+                                  empty_line = false;
                                 }
          ;
 
