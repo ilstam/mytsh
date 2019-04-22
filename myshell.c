@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -121,6 +122,23 @@ void exec_cmd(command *cmd)
             perror(PROJ_NAME);
         } else if (pid == 0) {
             /* child process */
+
+            if (!cmd->simple.in_redir[0] == '\0') {
+                close(STDIN_FILENO);
+                if (open(cmd->simple.in_redir, O_RDONLY) < 0) {
+                    perror(tokens[0]);
+                    exit(EXIT_FAILURE);
+                }
+            }
+
+            if (!cmd->simple.out_redir[0] == '\0') {
+                close(STDOUT_FILENO);
+                if (open(cmd->simple.out_redir, O_WRONLY | O_CREAT, 0666) < 0) {
+                    perror(tokens[0]);
+                    exit(EXIT_FAILURE);
+                }
+            }
+
             execvp(tokens[0], tokens);
             if (errno == ENOENT) {
                 printf(PROJ_NAME ": command not found: %s\n", tokens[0]);
