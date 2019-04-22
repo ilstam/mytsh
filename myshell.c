@@ -51,10 +51,12 @@ int s_tokenize(char *s, char *tokens[], int ntoks, const char *delims)
     return i;
 }
 
+/*
+ * Recursively free all memory allocated for the cmd structure.
+ */
 void free_cmd(command *cmd)
 {
-    if (cmd->type == CMD_SIMPLE) {
-    } else {
+    if (cmd->type == CMD_PIPE) {
         free(cmd->pipe.right);
         free_cmd(cmd->pipe.left);
         free(cmd->pipe.left);
