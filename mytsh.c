@@ -10,7 +10,7 @@
 #include "parser.tab.h"
 
 
-#define PROJ_NAME "mysh"
+#define PROJ_NAME "mytsh"
 
 #define MAX_INPUT 5000
 #define MAX_PATH 5000
