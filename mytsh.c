@@ -120,7 +120,10 @@ void exec_cmd(command *cmd)
         if (pid < 0) {
             /* error forking */
             perror(PROJ_NAME);
-        } else if (pid == 0) {
+            return;
+        }
+
+        if (pid == 0) {
             /* child process */
 
             if (!cmd->simple.in_redir[0] == '\0') {
@@ -146,23 +149,60 @@ void exec_cmd(command *cmd)
                 perror(PROJ_NAME);
             }
             exit(EXIT_FAILURE);
-        } else {
-            /* parent process */
-            int status;
-            do {
-                waitpid(pid, &status, WUNTRACED);
-            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
         }
 
-        /*printf("name: %s\n", cmd->simple.name);*/
-        /*printf("in: %s\n", cmd->simple.in_redir);*/
-        /*printf("out: %s\n", cmd->simple.out_redir);*/
-        /*printf("bg: %d\n", cmd->simple.bg);*/
-        /*puts("");*/
-    } else {
-        exec_cmd(cmd->pipe.left);
-        printf("|\n");
-        exec_cmd(cmd->pipe.right);
+        /* parent process */
+        int status;
+        do {
+            waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+
+    } else if (cmd->type == CMD_PIPE) {
+
+        int p[2];
+        if (pipe(p) < 0) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+
+        pid_t pid1, pid2;
+
+        if ((pid1 = fork()) == 0) {
+            close(1);
+            dup(p[1]);
+            close(p[0]);
+            close(p[1]);
+            exec_cmd(cmd->pipe.left);
+            exit(EXIT_SUCCESS);
+        }
+
+        if ((pid2 = fork()) == 0) {
+            close(0);
+            dup(p[0]);
+            close(p[0]);
+            close(p[1]);
+            exec_cmd(cmd->pipe.right);
+            exit(EXIT_SUCCESS);
+        }
+
+        if (pid1 < 0 || pid2 < 0) {
+            perror(PROJ_NAME);
+            return;
+        }
+
+
+        close(p[0]);
+        close(p[1]);
+
+        int status;
+
+        do {
+            waitpid(pid1, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+        do {
+            waitpid(pid2, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+
     }
 }
 
