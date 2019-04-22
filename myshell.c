@@ -12,6 +12,7 @@
 #define PROJ_NAME "mysh"
 
 #define MAX_INPUT 5000
+#define MAX_PATH 5000
 #define MAX_TOKENS 100
 
 
@@ -60,12 +61,56 @@ void free_cmd(command *cmd)
     }
 }
 
+/*
+ * Checks if the command to be executed matches any shell built-in.
+ * If so, it executes the built-in and returns true, otherwise returns false.
+ */
+bool handle_built_in(char **tokens, int ntokens)
+{
+    if (!strcmp(tokens[0], "cd")) {
+
+        int r = ntokens == 1 ? chdir(getenv("HOME")) : chdir(tokens[1]);
+        if (r < 0) {
+            perror("cd");
+        }
+
+    } else if (!strcmp(tokens[0], "pwd")) {
+
+        if (ntokens > 1) {
+            printf("pwd: too many arguments\n");
+            return true;
+        }
+        char buf[MAX_PATH];
+        getcwd(buf, MAX_PATH);
+        puts(buf);
+
+    } else if (!strcmp(tokens[0], "exit")) {
+
+        exit(EXIT_SUCCESS);
+
+    } else if (!strcmp(tokens[0], "kill")) {
+        puts("kill built-in not implemented yet");
+    } else if (!strcmp(tokens[0], "alias")) {
+        puts("alias built-in not implemented yet");
+    } else if (!strcmp(tokens[0], "unalias")) {
+        puts("unalias built-in not implemented yet");
+    } else {
+        return false;
+    }
+
+    return true;
+}
+
 void exec_cmd(command *cmd)
 {
     if (cmd->type == CMD_SIMPLE) {
         char *tokens[MAX_TOKENS];
         int ntokens = s_tokenize(cmd->simple.name, tokens, 50, " ");
         tokens[ntokens] = NULL;
+
+        if (handle_built_in(tokens, ntokens)) {
+            return;
+        }
 
         pid_t pid = fork();
 
@@ -85,7 +130,7 @@ void exec_cmd(command *cmd)
             /* parent process */
             int status;
             do {
-                pid_t wpid = waitpid(pid, &status, WUNTRACED);
+                waitpid(pid, &status, WUNTRACED);
             } while (!WIFEXITED(status) && !WIFSIGNALED(status));
         }
 

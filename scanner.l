@@ -7,7 +7,6 @@ CHAR            [0-9a-zA-Z_/\-\*\.]
 
 %%
 
-exit            { return EXIT; }
 "\n"            { return 0; }
 "&"             { return BACKGROUND; }
 "|"             { return PIPE;}

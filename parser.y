@@ -57,11 +57,10 @@ void yyerror(char *s);
 %type <bool_type> back_ground
 
 %start cmd_line
-%token EXIT PIPE INPUT_REDIR OUTPUT_REDIR STRING NL BACKGROUND
+%token PIPE INPUT_REDIR OUTPUT_REDIR STRING NL BACKGROUND
 
 %%
 cmd_line : /* empty */          { empty_line = true; }
-         | EXIT                 {  }
          | pipeline back_ground {
                                   final_cmd = $1;
                                   if (final_cmd.type == CMD_SIMPLE) {
