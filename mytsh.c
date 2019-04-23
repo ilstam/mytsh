@@ -95,7 +95,31 @@ bool handle_built_in(char **tokens, int ntokens)
         exit(EXIT_SUCCESS);
 
     } else if (!strcmp(tokens[0], "kill")) {
-        puts("kill built-in not implemented yet");
+        if (ntokens != 3) {
+            printf("kill: wrong number of arguments\n");
+            printf("usage: kill <signo> <pid> \n");
+            return true;
+        }
+
+        char *endptr;
+
+        int signo = strtol(tokens[1], &endptr, 10);
+        if (*endptr != '\0' || signo <= 0) {
+            printf("sincos: signo must be a positive integer\n");
+            printf("usage: kill <signo> <pid> \n");
+            return true;
+        }
+
+        int pid = strtol(tokens[2], &endptr, 10);
+        if (*endptr != '\0' || pid <= 0) {
+            printf("sincos: pid must be a positive integer\n");
+            printf("usage: kill <signo> <pid> \n");
+            return true;
+        }
+
+        if (kill(pid, signo) < 0) {
+            perror("kill");
+        }
     } else if (!strcmp(tokens[0], "alias")) {
         puts("alias built-in not implemented yet");
     } else if (!strcmp(tokens[0], "unalias")) {
