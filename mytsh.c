@@ -55,6 +55,18 @@ int s_tokenize(char *s, char *tokens[], int ntoks, const char *delims)
     return i;
 }
 
+void print_prompt(void) {
+    char hostname[MAX_PATH+1] = {'\0'};
+    char *username = getlogin();
+
+    gethostname(hostname, MAX_PATH);
+    if (!username) {
+        username = "unknown";
+    }
+
+    printf("[%s@%s]$ ", username, hostname);
+}
+
 /*
  * Recursively free all memory allocated for the cmd structure.
  */
@@ -228,7 +240,7 @@ int main(void)
     YY_BUFFER_STATE buffer;
 
     while (true) {
-        printf(PROJ_NAME "$ ");
+        print_prompt();
         fgets(input, MAX_INPUT, stdin);
         buffer = yy_scan_string(input);
 
