@@ -9,12 +9,15 @@
 
 #include "parser.tab.h"
 
-
 #define PROJ_NAME "mytsh"
 
 #define MAX_INPUT 5000
 #define MAX_PATH 5000
 #define MAX_TOKENS 100
+
+/* used for pipes */
+#define READ_END 0
+#define WRITE_END 1
 
 
 bool empty_line;
@@ -118,14 +121,12 @@ void exec_cmd(command *cmd)
         pid_t pid = fork();
 
         if (pid < 0) {
-            /* error forking */
             perror(PROJ_NAME);
             return;
         }
 
         if (pid == 0) {
             /* child process */
-
             if (!cmd->simple.in_redir[0] == '\0') {
                 close(STDIN_FILENO);
                 if (open(cmd->simple.in_redir, O_RDONLY) < 0) {
@@ -165,19 +166,19 @@ void exec_cmd(command *cmd)
         pid_t pid1, pid2;
 
         if ((pid1 = fork()) == 0) {
-            close(1);
-            dup(p[1]);
-            close(p[0]);
-            close(p[1]);
+            close(STDOUT_FILENO);
+            dup(p[WRITE_END]);
+            close(p[READ_END]);
+            close(p[WRITE_END]);
             exec_cmd(cmd->pipe.left);
             exit(EXIT_SUCCESS);
         }
 
         if ((pid2 = fork()) == 0) {
-            close(0);
-            dup(p[0]);
-            close(p[0]);
-            close(p[1]);
+            close(STDIN_FILENO);
+            dup(p[READ_END]);
+            close(p[READ_END]);
+            close(p[WRITE_END]);
             exec_cmd(cmd->pipe.right);
             exit(EXIT_SUCCESS);
         }
@@ -187,13 +188,12 @@ void exec_cmd(command *cmd)
             return;
         }
 
-        close(p[0]);
-        close(p[1]);
+        close(p[READ_END]);
+        close(p[WRITE_END]);
 
         while (wait(NULL) > 0) {
             /* wait for all children */
         }
-
     }
 }
 
@@ -205,9 +205,7 @@ int main(void)
 
     while (true) {
         printf(PROJ_NAME "$ ");
-
         fgets(input, MAX_INPUT, stdin);
-
         buffer = yy_scan_string(input);
 
         if ((retval = yyparse()) || empty_line) {
