@@ -9,6 +9,7 @@
 
 #include "parser.tab.h"
 
+
 #define PROJ_NAME "mytsh"
 
 #define MAX_INPUT 5000
@@ -19,6 +20,8 @@
 #define READ_END 0
 #define WRITE_END 1
 
+#define ATTR_UNUSED __attribute__((unused))
+
 
 bool empty_line;
 command final_cmd;
@@ -26,6 +29,31 @@ command final_cmd;
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 extern YY_BUFFER_STATE yy_scan_string (char *str);
 extern void yy_delete_buffer (YY_BUFFER_STATE buffer);
+
+
+void builtin_cd(char **tokens, int ntokens);
+void builtin_pwd(char **tokens, int ntokens);
+void builtin_exit(char **tokens, int ntokens);
+void builtin_kill(char **tokens, int ntokens);
+void builtin_alias(char **tokens, int ntokens);
+void builtin_unalias(char **tokens, int ntokens);
+
+
+typedef void (*builtin_func)(char **, int);
+
+struct builtin_pair {
+    char *name;
+    builtin_func fp;
+};
+
+struct builtin_pair builtins[] = {
+    {"cd", builtin_cd},
+    {"pwd", builtin_pwd},
+    {"exit", builtin_exit},
+    {"kill", builtin_kill},
+    {"alias", builtin_alias},
+    {"unalias", builtin_unalias},
+};
 
 
 /*
@@ -55,7 +83,8 @@ int s_tokenize(char *s, char *tokens[], int ntoks, const char *delims)
     return i;
 }
 
-void print_prompt(void) {
+void print_prompt(void)
+{
     char hostname[MAX_PATH+1] = {'\0'};
     char *username = getlogin();
 
@@ -67,80 +96,67 @@ void print_prompt(void) {
     printf("[%s@%s]$ ", username, hostname);
 }
 
-/*
- * Recursively free all memory allocated for the cmd structure.
- */
-void free_cmd(command *cmd)
+void builtin_cd(char **tokens, int ntokens)
 {
-    if (cmd->type == CMD_PIPE) {
-        free(cmd->pipe.right);
-        free_cmd(cmd->pipe.left);
-        free(cmd->pipe.left);
+    int r = ntokens == 1 ? chdir(getenv("HOME")) : chdir(tokens[1]);
+    if (r < 0) {
+        perror("cd");
     }
 }
 
-/*
- * Checks if the command to be executed matches any shell built-in.
- * If so, it executes the built-in and returns true, otherwise returns false.
- */
-bool handle_built_in(char **tokens, int ntokens)
+void builtin_pwd(char **tokens ATTR_UNUSED, int ntokens)
 {
-    if (!strcmp(tokens[0], "cd")) {
+    if (ntokens > 1) {
+        printf("pwd: too many arguments\n");
+        return;
+    }
+    char buf[MAX_PATH];
+    getcwd(buf, MAX_PATH);
+    puts(buf);
+}
 
-        int r = ntokens == 1 ? chdir(getenv("HOME")) : chdir(tokens[1]);
-        if (r < 0) {
-            perror("cd");
-        }
+void builtin_exit(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
+{
+    exit(EXIT_SUCCESS);
+}
 
-    } else if (!strcmp(tokens[0], "pwd")) {
-
-        if (ntokens > 1) {
-            printf("pwd: too many arguments\n");
-            return true;
-        }
-        char buf[MAX_PATH];
-        getcwd(buf, MAX_PATH);
-        puts(buf);
-
-    } else if (!strcmp(tokens[0], "exit")) {
-
-        exit(EXIT_SUCCESS);
-
-    } else if (!strcmp(tokens[0], "kill")) {
-        if (ntokens != 3) {
-            printf("kill: wrong number of arguments\n");
-            printf("usage: kill <signo> <pid> \n");
-            return true;
-        }
-
-        char *endptr;
-
-        int signo = strtol(tokens[1], &endptr, 10);
-        if (*endptr != '\0' || signo <= 0) {
-            printf("sincos: signo must be a positive integer\n");
-            printf("usage: kill <signo> <pid> \n");
-            return true;
-        }
-
-        int pid = strtol(tokens[2], &endptr, 10);
-        if (*endptr != '\0' || pid <= 0) {
-            printf("sincos: pid must be a positive integer\n");
-            printf("usage: kill <signo> <pid> \n");
-            return true;
-        }
-
-        if (kill(pid, signo) < 0) {
-            perror("kill");
-        }
-    } else if (!strcmp(tokens[0], "alias")) {
-        puts("alias built-in not implemented yet");
-    } else if (!strcmp(tokens[0], "unalias")) {
-        puts("unalias built-in not implemented yet");
-    } else {
-        return false;
+void builtin_kill(char **tokens, int ntokens)
+{
+    if (ntokens != 3) {
+        printf("kill: wrong number of arguments\n");
+        printf("usage: kill <signo> <pid> \n");
+        return;
     }
 
-    return true;
+    char *endptr;
+
+    int signo = strtol(tokens[1], &endptr, 10);
+    if (*endptr != '\0' || signo <= 0) {
+        printf("sincos: signo must be a positive integer\n");
+        printf("usage: kill <signo> <pid> \n");
+        return;
+    }
+
+    int pid = strtol(tokens[2], &endptr, 10);
+    if (*endptr != '\0' || pid <= 0) {
+        printf("sincos: pid must be a positive integer\n");
+        printf("usage: kill <signo> <pid> \n");
+        return;
+    }
+
+    if (kill(pid, signo) < 0) {
+        perror("kill");
+    }
+}
+
+void builtin_alias(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
+{
+    puts("alias built-in not implemented yet");
+}
+
+void builtin_unalias(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
+{
+    puts("unalias built-in not implemented yet");
 }
 
 void exec_cmd(command *cmd)
@@ -150,8 +166,12 @@ void exec_cmd(command *cmd)
         int ntokens = s_tokenize(cmd->simple.name, tokens, 50, " ");
         tokens[ntokens] = NULL;
 
-        if (handle_built_in(tokens, ntokens)) {
-            return;
+        size_t num_builtins = sizeof(builtins) / sizeof(struct builtin_pair);
+        for (size_t i = 0; i < num_builtins; i++) {
+            if (!strcmp(tokens[0], builtins[i].name)) {
+                (*builtins[i].fp)(tokens, ntokens);
+                return;
+            }
         }
 
         pid_t pid = fork();
@@ -233,6 +253,18 @@ void exec_cmd(command *cmd)
     }
 }
 
+/*
+ * Recursively free all memory allocated for the cmd structure.
+ */
+void free_cmd(command *cmd)
+{
+    if (cmd->type == CMD_PIPE) {
+        free(cmd->pipe.right);
+        free_cmd(cmd->pipe.left);
+        free(cmd->pipe.left);
+    }
+}
+
 int main(void)
 {
     int retval;
@@ -253,5 +285,5 @@ int main(void)
         free_cmd(&final_cmd);
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
