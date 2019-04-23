@@ -31,6 +31,8 @@ extern YY_BUFFER_STATE yy_scan_string (char *str);
 extern void yy_delete_buffer (YY_BUFFER_STATE buffer);
 
 
+void exec_cmd(command *cmd);
+
 void builtin_cd(char **tokens, int ntokens);
 void builtin_pwd(char **tokens, int ntokens);
 void builtin_exit(char **tokens, int ntokens);
@@ -159,100 +161,6 @@ void builtin_unalias(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
     puts("unalias built-in not implemented yet");
 }
 
-void exec_cmd(command *cmd)
-{
-    if (cmd->type == CMD_SIMPLE) {
-        char *tokens[MAX_TOKENS];
-        int ntokens = s_tokenize(cmd->simple.name, tokens, 50, " ");
-        tokens[ntokens] = NULL;
-
-        size_t num_builtins = sizeof(builtins) / sizeof(struct builtin_pair);
-        for (size_t i = 0; i < num_builtins; i++) {
-            if (!strcmp(tokens[0], builtins[i].name)) {
-                (*builtins[i].fp)(tokens, ntokens);
-                return;
-            }
-        }
-
-        pid_t pid = fork();
-
-        if (pid < 0) {
-            perror(PROJ_NAME);
-            return;
-        }
-
-        if (pid == 0) {
-            /* child process */
-            if (!cmd->simple.in_redir[0] == '\0') {
-                close(STDIN_FILENO);
-                if (open(cmd->simple.in_redir, O_RDONLY) < 0) {
-                    perror(tokens[0]);
-                    exit(EXIT_FAILURE);
-                }
-            }
-
-            if (!cmd->simple.out_redir[0] == '\0') {
-                close(STDOUT_FILENO);
-                if (open(cmd->simple.out_redir, O_WRONLY | O_CREAT, 0666) < 0) {
-                    perror(tokens[0]);
-                    exit(EXIT_FAILURE);
-                }
-            }
-
-            execvp(tokens[0], tokens);
-            if (errno == ENOENT) {
-                printf(PROJ_NAME ": command not found: %s\n", tokens[0]);
-            } else {
-                perror(PROJ_NAME);
-            }
-            exit(EXIT_FAILURE);
-        }
-
-        /* parent process */
-        if (!cmd->simple.bg) {
-            waitpid(pid, NULL, 0);
-        }
-
-    } else if (cmd->type == CMD_PIPE) {
-
-        int p[2];
-        if (pipe(p) < 0) {
-            perror("pipe");
-            exit(EXIT_FAILURE);
-        }
-
-        pid_t pid1, pid2;
-
-        if ((pid1 = fork()) == 0) {
-            dup2(p[WRITE_END], STDOUT_FILENO);
-            close(p[READ_END]);
-            close(p[WRITE_END]);
-            exec_cmd(cmd->pipe.left);
-            exit(EXIT_SUCCESS);
-        }
-
-        if ((pid2 = fork()) == 0) {
-            dup2(p[READ_END], STDIN_FILENO);
-            close(p[READ_END]);
-            close(p[WRITE_END]);
-            exec_cmd(cmd->pipe.right);
-            exit(EXIT_SUCCESS);
-        }
-
-        if (pid1 < 0 || pid2 < 0) {
-            perror(PROJ_NAME);
-            return;
-        }
-
-        close(p[READ_END]);
-        close(p[WRITE_END]);
-
-        while (wait(NULL) > 0) {
-            /* wait for all children */
-        }
-    }
-}
-
 /*
  * Recursively free all memory allocated for the cmd structure.
  */
@@ -262,6 +170,108 @@ void free_cmd(command *cmd)
         free(cmd->pipe.right);
         free_cmd(cmd->pipe.left);
         free(cmd->pipe.left);
+    }
+}
+
+void exec_cmd_simple(cmd_simple *cmd)
+{
+    char *tokens[MAX_TOKENS];
+    int ntokens = s_tokenize(cmd->name, tokens, 50, " ");
+    tokens[ntokens] = NULL;
+
+    size_t num_builtins = sizeof(builtins) / sizeof(struct builtin_pair);
+    for (size_t i = 0; i < num_builtins; i++) {
+        if (!strcmp(tokens[0], builtins[i].name)) {
+            (*builtins[i].fp)(tokens, ntokens);
+            return;
+        }
+    }
+
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror(PROJ_NAME);
+        return;
+    }
+
+    if (pid == 0) {
+        /* child process */
+        if (!cmd->in_redir[0] == '\0') {
+            close(STDIN_FILENO);
+            if (open(cmd->in_redir, O_RDONLY) < 0) {
+                perror(tokens[0]);
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if (!cmd->out_redir[0] == '\0') {
+            close(STDOUT_FILENO);
+            if (open(cmd->out_redir, O_WRONLY | O_CREAT, 0666) < 0) {
+                perror(tokens[0]);
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        execvp(tokens[0], tokens);
+        if (errno == ENOENT) {
+            printf(PROJ_NAME ": command not found: %s\n", tokens[0]);
+        } else {
+            perror(PROJ_NAME);
+        }
+        exit(EXIT_FAILURE);
+    }
+
+    /* parent process */
+    if (!cmd->bg) {
+        waitpid(pid, NULL, 0);
+    }
+}
+
+void exec_cmd_pipe(cmd_pipe *cmd)
+{
+    int p[2];
+    pid_t pid1, pid2;
+
+    if (pipe(p) < 0) {
+        perror("pipe");
+        exit(EXIT_FAILURE);
+    }
+
+    if ((pid1 = fork()) == 0) {
+        dup2(p[WRITE_END], STDOUT_FILENO);
+        close(p[READ_END]);
+        close(p[WRITE_END]);
+        exec_cmd(cmd->left);
+        exit(EXIT_SUCCESS);
+    }
+
+    if ((pid2 = fork()) == 0) {
+        dup2(p[READ_END], STDIN_FILENO);
+        close(p[READ_END]);
+        close(p[WRITE_END]);
+        exec_cmd(cmd->right);
+        exit(EXIT_SUCCESS);
+    }
+
+    if (pid1 < 0 || pid2 < 0) {
+        perror(PROJ_NAME);
+        return;
+    }
+
+    close(p[READ_END]);
+    close(p[WRITE_END]);
+
+    while (wait(NULL) > 0) {
+        /* wait for all children */
+    }
+}
+
+void exec_cmd(command *cmd)
+{
+    if (cmd->type == CMD_SIMPLE) {
+        exec_cmd_simple(&cmd->simple);
+    } else if (cmd->type == CMD_PIPE) {
+        exec_cmd_pipe(&cmd->pipe);
     }
 }
 
