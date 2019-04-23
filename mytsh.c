@@ -153,7 +153,9 @@ void exec_cmd(command *cmd)
         }
 
         /* parent process */
-        waitpid(pid, NULL, 0);
+        if (!cmd->simple.bg) {
+            waitpid(pid, NULL, 0);
+        }
 
     } else if (cmd->type == CMD_PIPE) {
 
