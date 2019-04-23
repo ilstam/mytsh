@@ -106,6 +106,7 @@ pipeline : simple               { $$.type = CMD_SIMPLE; $$.simple = $1; }
                                   $$.pipe.left = left;
 
                                   command *right = malloc(sizeof(command));
+                                  right->type = CMD_SIMPLE;
                                   right->simple = $3;
                                   $$.pipe.right = right;
                                 }
