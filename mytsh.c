@@ -192,8 +192,7 @@ void exec_cmd(command *cmd)
         pid_t pid1, pid2;
 
         if ((pid1 = fork()) == 0) {
-            close(STDOUT_FILENO);
-            dup(p[WRITE_END]);
+            dup2(p[WRITE_END], STDOUT_FILENO);
             close(p[READ_END]);
             close(p[WRITE_END]);
             exec_cmd(cmd->pipe.left);
@@ -201,8 +200,7 @@ void exec_cmd(command *cmd)
         }
 
         if ((pid2 = fork()) == 0) {
-            close(STDIN_FILENO);
-            dup(p[READ_END]);
+            dup2(p[READ_END], STDIN_FILENO);
             close(p[READ_END]);
             close(p[WRITE_END]);
             exec_cmd(cmd->pipe.right);
