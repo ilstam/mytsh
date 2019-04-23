@@ -57,6 +57,14 @@ struct builtin_pair builtins[] = {
     {"unalias", builtin_unalias},
 };
 
+typedef struct alias_node {
+    char *alias;
+    char *real;
+    struct alias_node *next;
+} alias_node;
+
+alias_node *alias_list;
+
 
 /*
  * Tokenize a c-string, into variable size tokens.
@@ -79,8 +87,9 @@ int s_tokenize(char *s, char *tokens[], int ntoks, const char *delims)
     }
 
     int i;
-    for (i = 1; i < ntoks && (tokens[i] = strtok(NULL, delims)) != NULL; i++)
+    for (i = 1; i < ntoks && (tokens[i] = strtok(NULL, delims)) != NULL; i++) {
         ; /* void */
+    }
 
     return i;
 }
@@ -126,8 +135,7 @@ void builtin_kill(char **tokens, int ntokens)
 {
     if (ntokens != 3) {
         printf("kill: wrong number of arguments\n");
-        printf("usage: kill <signo> <pid> \n");
-        return;
+        goto usage;
     }
 
     char *endptr;
@@ -135,25 +143,116 @@ void builtin_kill(char **tokens, int ntokens)
     int signo = strtol(tokens[1], &endptr, 10);
     if (*endptr != '\0' || signo <= 0) {
         printf("sincos: signo must be a positive integer\n");
-        printf("usage: kill <signo> <pid> \n");
-        return;
+        goto usage;
     }
 
     int pid = strtol(tokens[2], &endptr, 10);
     if (*endptr != '\0' || pid <= 0) {
         printf("sincos: pid must be a positive integer\n");
-        printf("usage: kill <signo> <pid> \n");
-        return;
+        goto usage;
     }
 
     if (kill(pid, signo) < 0) {
         perror("kill");
     }
+
+usage:
+    printf("usage: kill <signo> <pid> \n");
 }
 
-void builtin_alias(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
+void builtin_alias(char **tokens, int ntokens)
 {
-    puts("alias built-in not implemented yet");
+    if (ntokens == 1) {
+        /* just print all aliases and quit */
+
+        for (alias_node *n = alias_list; n; n = n->next) {
+            printf("%s=%s\n", n->alias, n->real);
+        }
+
+        return;
+    }
+
+    /* put spaces around each '=' char encountered and tokenize the string again */
+
+    char command_line[MAX_INPUT];
+    int coppied = 0;
+
+    for (int i = 0; i < ntokens; i++) {
+        char *s = tokens[i];
+        while (*s) {
+            if (*s == '=') {
+                command_line[coppied++] = ' ';
+                command_line[coppied++] = '=';
+                command_line[coppied++] = ' ';
+            } else {
+                command_line[coppied++] = *s;
+            }
+            s++;
+        }
+        command_line[coppied++] = ' ';
+    }
+    command_line[coppied] = '\0';
+
+    char *new_tokens[MAX_TOKENS];
+    ntokens = s_tokenize(command_line, new_tokens, MAX_TOKENS, " ");
+
+    /* check whether this is an alias assignment */
+
+    if (ntokens >= 3 && !strcmp(new_tokens[2], "=")) {
+
+        if (ntokens == 3 || !strcmp(new_tokens[1], "=") || !strcmp(new_tokens[3], "=")) {
+            puts("alias: wrong syntax");
+            puts("usage: alias foo=bar");
+            return;
+        }
+
+        char tmp_buf[MAX_INPUT] = {'\0'};
+
+        /* search if there's already an alias with the same name and update it */
+
+        for (alias_node *n = alias_list; n; n = n->next) {
+            if (!strcmp(n->alias, new_tokens[1])) {
+                free(n->real);
+
+                for (int i = 3; i < ntokens; i++) {
+                    strcat(tmp_buf, tokens[i]);
+                    strcat(tmp_buf, " ");
+                }
+                n->real = malloc(strlen(tmp_buf));
+                strcpy(n->real, tmp_buf);
+
+                return;
+            }
+        }
+
+        /* add a new alias node in the list */
+
+        alias_node *new = malloc(sizeof(alias_node));
+        new->alias = malloc(strlen(new_tokens[1]));
+        strcpy(new->alias, new_tokens[1]);
+
+        for (int i = 3; i < ntokens; i++) {
+            strcat(tmp_buf, tokens[i]);
+            strcat(tmp_buf, " ");
+        }
+        new->real = malloc(strlen(tmp_buf));
+        strcpy(new->real, tmp_buf);
+
+        new->next = alias_list;
+        alias_list = new;
+
+        return;
+    }
+
+    /* if any of the tokens matches any alias print them */
+
+    for (int i = 1; i < ntokens; i++) {
+        for (alias_node *n = alias_list; n; n = n->next) {
+            if (!strcmp(n->alias, new_tokens[i])) {
+                printf("%s=%s\n", n->alias, n->real);
+            }
+        }
+    }
 }
 
 void builtin_unalias(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
@@ -162,29 +261,63 @@ void builtin_unalias(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
 }
 
 /*
- * Recursively free all memory allocated for the cmd structure.
+ * Checks if the first token matches a built-in command.
+ *
+ * If so, it dispatches the call to the appropriate built-in handler and
+ * returns true. Otherwise it returns false.
  */
-void free_cmd(command *cmd)
+bool call_builtin(char **tokens, int ntokens)
 {
-    if (cmd->type == CMD_PIPE) {
-        free(cmd->pipe.right);
-        free_cmd(cmd->pipe.left);
-        free(cmd->pipe.left);
+    size_t num_builtins = sizeof(builtins) / sizeof(struct builtin_pair);
+    for (size_t i = 0; i < num_builtins; i++) {
+        if (!strcmp(tokens[0], builtins[i].name)) {
+            (*builtins[i].fp)(tokens, ntokens);
+            return true;
+        }
     }
+    return false;
+}
+
+/*
+ * Checks if the first token matches any alias.
+ *
+ * In case it does, it re-builds tokens using the resulting command after
+ * doing the alias replacement and updates the value of ntokens.
+ *
+ * When there is no match, tokens and ntokens remain unchanged.
+ */
+void replace_alias(char **tokens, int *ntokens)
+{
+    alias_node *n = alias_list;
+    for (; n; n = n->next) {
+        if (!strcmp(n->alias, tokens[0])) {
+            break;
+        }
+    }
+
+    if (n) {
+        char final_cmd[MAX_INPUT];
+        strcpy(final_cmd, n->real);
+
+        for (int i = 1; i < *ntokens; i++) {
+            strcat(final_cmd, " ");
+            strcat(final_cmd, tokens[i]);
+        }
+
+        *ntokens = s_tokenize(final_cmd, tokens, MAX_TOKENS, " ");
+    }
+
+    tokens[*ntokens] = NULL;
 }
 
 void exec_cmd_simple(cmd_simple *cmd)
 {
     char *tokens[MAX_TOKENS];
-    int ntokens = s_tokenize(cmd->name, tokens, 50, " ");
-    tokens[ntokens] = NULL;
+    int ntokens = s_tokenize(cmd->name, tokens, MAX_TOKENS, " ");
 
-    size_t num_builtins = sizeof(builtins) / sizeof(struct builtin_pair);
-    for (size_t i = 0; i < num_builtins; i++) {
-        if (!strcmp(tokens[0], builtins[i].name)) {
-            (*builtins[i].fp)(tokens, ntokens);
-            return;
-        }
+    replace_alias(tokens, &ntokens);
+    if (call_builtin(tokens, ntokens)) {
+        return;
     }
 
     pid_t pid = fork();
@@ -272,6 +405,18 @@ void exec_cmd(command *cmd)
         exec_cmd_simple(&cmd->simple);
     } else if (cmd->type == CMD_PIPE) {
         exec_cmd_pipe(&cmd->pipe);
+    }
+}
+
+/*
+ * Recursively free all memory allocated for the cmd structure.
+ */
+void free_cmd(command *cmd)
+{
+    if (cmd->type == CMD_PIPE) {
+        free(cmd->pipe.right);
+        free_cmd(cmd->pipe.left);
+        free(cmd->pipe.left);
     }
 }
 

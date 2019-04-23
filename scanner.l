@@ -3,7 +3,7 @@
 #include <string.h>
 %}
 
-CHAR            [0-9a-zA-Z_/\-\*\.]
+CHAR            [0-9a-zA-Z_/\-\*\.\=]
 
 %%
 
