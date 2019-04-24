@@ -5,6 +5,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "parser.tab.h"
 
@@ -13,6 +15,8 @@
 
 #define MAX_INPUT 5000
 #define MAX_PATH 5000
+#define MAX_HOSTNAME 30
+#define MAX_PROMPT 100
 #define MAX_TOKENS 100
 
 /* used for pipes */
@@ -93,17 +97,35 @@ int s_tokenize(char *s, char *tokens[], int ntoks, const char *delims)
     return i;
 }
 
-void print_prompt(void)
+/*
+ * Returns true if all chars of s are whitespace, else false.
+ */
+bool s_is_empty(const char *s)
 {
-    char hostname[MAX_PATH+1] = {'\0'};
+    for (; *s; s++) {
+        if (!isspace(*s)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/*
+ * Fills @param prompt with the shell prompt and returns a pointer to it.
+ */
+char *get_prompt(char *prompt)
+{
+    char hostname[MAX_HOSTNAME+1] = {'\0'};
     char *username = getlogin();
 
-    gethostname(hostname, MAX_PATH);
+    gethostname(hostname, MAX_HOSTNAME);
     if (!username) {
         username = "unknown";
     }
 
-    printf("[%s@%s]$ ", username, hostname);
+    snprintf(prompt, MAX_PROMPT, "[%s@%s]$ ", username, hostname);
+    return prompt;
 }
 
 void builtin_cd(char **tokens, int ntokens)
@@ -467,22 +489,23 @@ void free_cmd(command *cmd)
 
 int main(void)
 {
-    int retval;
-    char input[MAX_INPUT+1];
-    YY_BUFFER_STATE buffer;
+    char prompt[MAX_PROMPT+1];
 
     while (true) {
-        print_prompt();
-        fgets(input, MAX_INPUT, stdin);
-        buffer = yy_scan_string(input);
+        char *input = readline(get_prompt(prompt));
+        if (!s_is_empty(input)) {
+            add_history(input);
+        }
 
-        if ((retval = yyparse()) || empty_line) {
-            continue;
+        YY_BUFFER_STATE buffer = yy_scan_string(input);
+
+        if (!yyparse() && !empty_line) {
+            exec_cmd(&final_cmd);
         }
 
         yy_delete_buffer(buffer);
-        exec_cmd(&final_cmd);
         free_cmd(&final_cmd);
+        free(input);
     }
 
     return EXIT_SUCCESS;
