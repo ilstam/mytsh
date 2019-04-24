@@ -36,15 +36,15 @@ extern void yy_delete_buffer (YY_BUFFER_STATE buffer);
 
 void exec_cmd(command *cmd);
 
-void builtin_cd(char **tokens, int ntokens);
-void builtin_pwd(char **tokens, int ntokens);
-void builtin_exit(char **tokens, int ntokens);
-void builtin_kill(char **tokens, int ntokens);
-void builtin_alias(char **tokens, int ntokens);
-void builtin_unalias(char **tokens, int ntokens);
+void builtin_cd(const char **tokens, int ntokens);
+void builtin_pwd(const char **tokens, int ntokens);
+void builtin_exit(const char **tokens, int ntokens);
+void builtin_kill(const char **tokens, int ntokens);
+void builtin_alias(const char **tokens, int ntokens);
+void builtin_unalias(const char **tokens, int ntokens);
 
 
-typedef void (*builtin_func)(char **, int);
+typedef void (*builtin_func)(const char **, int);
 
 struct builtin_pair {
     char *name;
@@ -128,7 +128,7 @@ char *get_prompt(char *prompt)
     return prompt;
 }
 
-void builtin_cd(char **tokens, int ntokens)
+void builtin_cd(const char **tokens, int ntokens)
 {
     int r = ntokens == 1 ? chdir(getenv("HOME")) : chdir(tokens[1]);
     if (r < 0) {
@@ -136,7 +136,7 @@ void builtin_cd(char **tokens, int ntokens)
     }
 }
 
-void builtin_pwd(char **tokens ATTR_UNUSED, int ntokens)
+void builtin_pwd(const char **tokens ATTR_UNUSED, int ntokens)
 {
     if (ntokens > 1) {
         printf("pwd: too many arguments\n");
@@ -147,12 +147,12 @@ void builtin_pwd(char **tokens ATTR_UNUSED, int ntokens)
     puts(buf);
 }
 
-void builtin_exit(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
+void builtin_exit(const char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
 {
     exit(EXIT_SUCCESS);
 }
 
-void builtin_kill(char **tokens, int ntokens)
+void builtin_kill(const char **tokens, int ntokens)
 {
     if (ntokens != 3) {
         printf("kill: wrong number of arguments\n");
@@ -181,7 +181,7 @@ usage:
     printf("usage: kill <signo> <pid> \n");
 }
 
-void builtin_alias(char **tokens, int ntokens)
+void builtin_alias(const char **tokens, int ntokens)
 {
     if (ntokens == 1) {
         /* just print all aliases and quit */
@@ -199,7 +199,7 @@ void builtin_alias(char **tokens, int ntokens)
     int coppied = 0;
 
     for (int i = 0; i < ntokens; i++) {
-        char *s = tokens[i];
+        const char *s = tokens[i];
         while (*s) {
             if (*s == '=') {
                 command_line[coppied++] = ' ';
@@ -287,7 +287,7 @@ void delete_all_aliases(void)
     }
 }
 
-void builtin_unalias(char **tokens, int ntokens)
+void builtin_unalias(const char **tokens, int ntokens)
 {
     if (ntokens == 1) {
         printf("unalias: not enough arguments\n");
@@ -333,7 +333,7 @@ void builtin_unalias(char **tokens, int ntokens)
  * If so, it dispatches the call to the appropriate built-in handler and
  * returns true. Otherwise it returns false.
  */
-bool call_builtin(char **tokens, int ntokens)
+bool call_builtin(const char **tokens, int ntokens)
 {
     size_t num_builtins = sizeof(builtins) / sizeof(struct builtin_pair);
     for (size_t i = 0; i < num_builtins; i++) {
@@ -383,7 +383,7 @@ void exec_cmd_simple(cmd_simple *cmd)
     int ntokens = s_tokenize(cmd->name, tokens, MAX_TOKENS, " ");
 
     replace_alias(tokens, &ntokens);
-    if (call_builtin(tokens, ntokens)) {
+    if (call_builtin((const char **) tokens, ntokens)) {
         return;
     }
 
