@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 
 #include "parser.tab.h"
@@ -215,7 +214,7 @@ void builtin_alias(char **tokens, int ntokens)
                 free(n->real);
 
                 for (int i = 3; i < ntokens; i++) {
-                    strcat(tmp_buf, tokens[i]);
+                    strcat(tmp_buf, new_tokens[i]);
                     strcat(tmp_buf, " ");
                 }
                 n->real = malloc(strlen(tmp_buf));
@@ -232,7 +231,7 @@ void builtin_alias(char **tokens, int ntokens)
         strcpy(new->alias, new_tokens[1]);
 
         for (int i = 3; i < ntokens; i++) {
-            strcat(tmp_buf, tokens[i]);
+            strcat(tmp_buf, new_tokens[i]);
             strcat(tmp_buf, " ");
         }
         new->real = malloc(strlen(tmp_buf));
@@ -255,9 +254,55 @@ void builtin_alias(char **tokens, int ntokens)
     }
 }
 
-void builtin_unalias(char **tokens ATTR_UNUSED, int ntokens ATTR_UNUSED)
+void delete_all_aliases(void)
 {
-    puts("unalias built-in not implemented yet");
+    alias_node *tmp = NULL;
+    for (; alias_list; alias_list = tmp) {
+        tmp = alias_list->next;
+        free(alias_list->alias);
+        free(alias_list->real);
+        free(alias_list);
+    }
+}
+
+void builtin_unalias(char **tokens, int ntokens)
+{
+    if (ntokens == 1) {
+        printf("unalias: not enough arguments\n");
+        return;
+    }
+
+    if (ntokens == 2 && !strcmp(tokens[1], "-a")) {
+        delete_all_aliases();
+        return;
+    }
+
+    for (int i = 1; i < ntokens; i++) {
+        bool found = false;
+
+        alias_node *n = alias_list, *prev = NULL;
+        for (; n; prev = n, n = n->next) {
+            if (!strcmp(n->alias, tokens[i])) {
+                free(n->alias);
+                free(n->real);
+
+                if (!prev) {
+                    alias_list = n->next;
+                } else {
+                    prev->next = n->next;
+                }
+                free(n);
+
+                printf("unalias: successfully deleted alias: %s\n", tokens[i]);
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            printf("unalias: not such alias found: %s\n", tokens[i]);
+        }
+    }
 }
 
 /*
