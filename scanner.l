@@ -3,6 +3,9 @@
 #include <string.h>
 %}
 
+%option noinput
+%option nounput
+
 CHAR            [0-9a-zA-Z_/\-\*\.\=]
 
 %%
