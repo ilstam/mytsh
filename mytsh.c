@@ -193,18 +193,21 @@ void builtin_alias(const char **tokens, int ntokens)
         return;
     }
 
-    /* put spaces around each '=' char encountered and tokenize the string again */
+    /* Put spaces around the first occurance of the '=' char
+     * encountered and tokenize the string again. */
 
     char command_line[MAX_INPUT];
     int coppied = 0;
+    bool eq_matched = false;
 
     for (int i = 0; i < ntokens; i++) {
         const char *s = tokens[i];
         while (*s) {
-            if (*s == '=') {
+            if (!eq_matched && *s == '=') {
                 command_line[coppied++] = ' ';
                 command_line[coppied++] = '=';
                 command_line[coppied++] = ' ';
+                eq_matched = true;
             } else {
                 command_line[coppied++] = *s;
             }
