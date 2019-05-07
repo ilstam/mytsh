@@ -425,7 +425,12 @@ void exec_cmd_simple(cmd_simple *cmd)
     }
 
     /* parent process */
-    if (!cmd->bg) {
+
+    if (cmd->bg) {
+        /* let the kernel automatically reap the child when done,
+         * instead of leaving a defunct/zombie process behind */
+        signal(SIGCHLD, SIG_IGN);
+    } else {
         waitpid(pid, NULL, 0);
     }
 }
