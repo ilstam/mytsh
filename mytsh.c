@@ -507,6 +507,11 @@ void free_cmd(command *cmd)
 int main(void)
 {
     char prompt[MAX_PROMPT+1];
+    char path_self[MAX_PATH+1];
+
+    if (readlink("/proc/self/exe", path_self, MAX_PATH) >= 0) {
+        setenv("SHELL", path_self, 1);
+    }
 
     while (true) {
         char *input = readline(get_prompt(prompt));
