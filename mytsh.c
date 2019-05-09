@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <sys/wait.h>
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -124,7 +125,13 @@ char *get_prompt(char *prompt)
         username = "unknown";
     }
 
-    snprintf(prompt, MAX_PROMPT, "[%s@%s]$ ", username, hostname);
+    char cwd[MAX_PATH];
+    getcwd(cwd, MAX_PATH);
+    if (!strcmp(cwd, getenv("HOME"))) {
+        strcpy(cwd, "~");
+    }
+
+    snprintf(prompt, MAX_PROMPT, "[%s@%s %s]$ ", username, hostname, basename(cwd));
     return prompt;
 }
 
