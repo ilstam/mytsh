@@ -163,13 +163,13 @@ void builtin_kill(const char **tokens, int ntokens)
 
     int signo = strtol(tokens[1], &endptr, 10);
     if (*endptr != '\0' || signo <= 0) {
-        printf("sincos: signo must be a positive integer\n");
+        printf("kill: signo must be a positive integer\n");
         goto usage;
     }
 
     int pid = strtol(tokens[2], &endptr, 10);
     if (*endptr != '\0' || pid <= 0) {
-        printf("sincos: pid must be a positive integer\n");
+        printf("kill: pid must be a positive integer\n");
         goto usage;
     }
 
@@ -177,8 +177,10 @@ void builtin_kill(const char **tokens, int ntokens)
         perror("kill");
     }
 
-usage:
-    printf("usage: kill <signo> <pid> \n");
+    return;
+
+ usage:
+    printf("usage: kill <signo> <pid>\n");
 }
 
 void builtin_alias(const char **tokens, int ntokens)
